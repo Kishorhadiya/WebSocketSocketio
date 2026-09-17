@@ -18,7 +18,6 @@ const Login = () => {
     try {
       const value = { email, password };
       const res = await axios.post(`${API_URL}/api/v1/login`, value);
-      console.log('Login successful:', res.data);
 
       if (res.data.token) {
         setAccesstoken(res.data.token);

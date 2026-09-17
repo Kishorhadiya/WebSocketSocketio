@@ -41,10 +41,9 @@ const Home = () => {
         formData
      
       );
-      console.log("Files uploaded successfully:", response.data);
       return response.data;
     } catch (error) {
-      console.log("Error uploading files:", error);
+      console.error("Error uploading files:", error);
       return null;
     }
   };
@@ -66,7 +65,7 @@ const Home = () => {
 
       setUsers(response.data.users || []);
     } catch (error) {
-      console.log("Error fetching users:", error);
+      console.error("Error fetching users:", error);
     }
   };
 
@@ -102,7 +101,6 @@ const Home = () => {
     getAllUser();
 
     socket.on("connect", () => {
-      console.log("Socket connected:", socket.id);
     });
 
     socket.emit("user-id", myId);
@@ -117,8 +115,6 @@ useEffect(() => {
     return;
   }
 
-  console.log("Joining room:", roomid);
-
   // Clear previous chat immediately
   setHandledata([]);
 
@@ -127,13 +123,11 @@ useEffect(() => {
 
   // Receive old messages
   const receiveOldMessages = (data) => {
-    console.log("Old messages:", data);
     setHandledata(data);
   };
 
   // Receive new messages
   const receiveMessage = (data) => {
-    console.log("New message:", data);
     setHandledata((prev) => [...prev, data]);
   };
 

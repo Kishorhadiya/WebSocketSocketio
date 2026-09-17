@@ -31,8 +31,6 @@ const io=new Server(server,{
 
 
  io.on("connection",(socket)=>{
-    console.log("User connected :",socket.id);
-
     socket.on("user-ID",(id)=>{
         socket.join(id);
     })
@@ -47,7 +45,6 @@ const io=new Server(server,{
     })
 
     socket.on("user-msg",(data)=>{
-        console.log("Message",data);
          SocketData.create({
             roomid:data.roomid,
             msg:data.msg,

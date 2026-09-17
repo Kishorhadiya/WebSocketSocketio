@@ -19,7 +19,6 @@ const Register = () => {
     try {
       const value = { username, email, password };
       const res = await axios.post(`${API_URL}/api/v1/create`, value);
-      console.log('Registration successful:', res.data);
 
       if (res.data.token) {
         setAccesstoken(res.data.token);
