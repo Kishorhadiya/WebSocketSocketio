@@ -158,12 +158,11 @@ useEffect(() => {
             <h1 className="font-bold text-base text-green-950">Chat App</h1>
           </div>
 
-          <button
-            onClick={logout}
-            className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-colors"
-          >
-            Logout
-          </button>
+          {currentuser?.username && (
+            <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 truncate max-w-[120px]">
+              {currentuser.username}
+            </span>
+          )}
         </div>
 
         {/* Search */}

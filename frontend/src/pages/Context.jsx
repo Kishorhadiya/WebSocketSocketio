@@ -5,11 +5,11 @@ const ContextData = createContext();
 const Context = ({ children }) => {
   const [currentuser, setCurrentuserState] = useState(() => {
     const saved = sessionStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
+    return saved ? JSON.parse(saved) : { _id: 'guest_user', username: 'Guest', email: 'guest@example.com' };
   });
 
   const [accesstoken, setAccesstokenState] = useState(() => {
-    return sessionStorage.getItem('token') || '';
+    return sessionStorage.getItem('token') || 'guest_token';
   });
 
   const setCureentuser = (user) => {
