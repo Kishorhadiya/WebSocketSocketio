@@ -3,18 +3,21 @@ import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { useData } from './Context';
 import { API_URL } from '../config';
+import chatBg from '../assets/chat-bg.jpg';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const { setAccesstoken,setCureentuser } = useData();
+  const { setAccesstoken, setCureentuser } = useData();
 
   const handelSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
       const value = { email, password };
       const res = await axios.post(`${API_URL}/api/v1/login`, value);
@@ -29,73 +32,94 @@ const Login = () => {
     } catch (err) {
       console.error('Login error:', err);
       setError(err.response?.data?.message || 'Invalid email or login failed');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-2xl p-8 shadow-2xl shadow-indigo-950/40 backdrop-blur-xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-600/20 text-indigo-400 mb-3 border border-indigo-500/30">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+    <div className="min-h-screen flex bg-[#0b141a]">
+      {/* Left — Background Image Panel */}
+      <div
+        className="hidden lg:flex lg:w-[45%] relative items-center justify-center"
+        style={{
+          backgroundImage: `url(${chatBg})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-[#00a884]/70 to-[#0b141a]/95" />
+        <div className="relative z-10 px-12 text-center">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-md">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 4.418 9 8z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Login</h1>
-          <p className="text-sm text-slate-400 mt-2">Welcome back! Please enter your details.</p>
+          <h2 className="text-3xl font-bold text-white mb-3">Chat App</h2>
+          <p className="text-white/60 text-sm max-w-xs mx-auto">Connect, share, and chat in real-time.</p>
         </div>
+      </div>
 
-        {error && (
-          <div className="mb-5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
-            {error}
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handelSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-            />
+      {/* Right — Login Form */}
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm">
+          {/* Logo for mobile */}
+          <div className="lg:hidden flex items-center gap-2 mb-10">
+            <div className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 4.418 9 8z" />
+              </svg>
+            </div>
+            <span className="text-white font-bold text-lg">Chat App</span>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-            />
-          </div>
+          <h1 className="text-2xl font-bold text-white mb-1">Welcome back</h1>
+          <p className="text-[#8696a0] text-sm mb-8">Sign in to continue chatting</p>
 
-          <button
-            type="submit"
-            className="w-full py-3.5 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition-all duration-200 active:scale-[0.98] cursor-pointer"
-          >
-            Sign In
-          </button>
-        </form>
+          {error && (
+            <div className="mb-5 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {error}
+            </div>
+          )}
 
-        {/* Links */}
-        <div className="mt-6 flex flex-col items-center gap-2 text-sm text-slate-400">
-          <p>
+          <form onSubmit={handelSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-[#8696a0] mb-1.5 uppercase tracking-wider">Email</label>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full px-4 py-3 bg-[#1a2730] border border-[#2a3942] rounded-lg text-white placeholder-[#8696a0]/40 focus:outline-none focus:ring-2 focus:ring-[#00a884]/60 focus:border-transparent transition-all text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#8696a0] mb-1.5 uppercase tracking-wider">Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full px-4 py-3 bg-[#1a2730] border border-[#2a3942] rounded-lg text-white placeholder-[#8696a0]/40 focus:outline-none focus:ring-2 focus:ring-[#00a884]/60 focus:border-transparent transition-all text-sm"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 mt-2 bg-[#00a884] hover:bg-[#00bf96] disabled:opacity-50 text-white font-semibold rounded-lg transition-all active:scale-[0.98] cursor-pointer text-sm"
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+
+          <p className="text-center text-sm text-[#8696a0] mt-8">
             Don't have an account?{' '}
-            <Link to="/register" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
-              Register here
+            <Link to="/register" className="text-[#00a884] hover:text-[#25d366] font-medium transition-colors">
+              Create one
             </Link>
           </p>
         </div>
