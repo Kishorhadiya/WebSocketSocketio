@@ -9,7 +9,7 @@ const Context = ({ children }) => {
   });
 
   const [accesstoken, setAccesstokenState] = useState(() => {
-    return sessionStorage.getItem('token') || 'guest_token';
+    return sessionStorage.getItem('token') || null;
   });
 
   const setCureentuser = (user) => {
