@@ -49,6 +49,10 @@ const SocketUserSchema = mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  deletedFor: {
+    type: [String],
+    default: [],
+  },
 });
 
 const SocketData=mongoose.model("SocketData",SocketUserSchema)

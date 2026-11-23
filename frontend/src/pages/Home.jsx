@@ -13,6 +13,7 @@ import {
   IoDocumentTextOutline,
   IoChatbubbleOutline,
   IoLogOutOutline,
+  IoTrashOutline,
 } from "react-icons/io5";
 import { API_URL } from "../config";
 import chatBg from "../assets/chat-bg.jpg";
@@ -72,6 +73,7 @@ const Home = () => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [unreadCounts, setUnreadCounts] = useState({});
   const [notifications, setNotifications] = useState([]);
+  const [deleteModalMsg, setDeleteModalMsg] = useState(null);
 
   const messagesEndRef = useRef(null);
   const notifTimeoutRef = useRef({});
@@ -93,6 +95,27 @@ const Home = () => {
       clearTimeout(notifTimeoutRef.current[id]);
       delete notifTimeoutRef.current[id];
     }
+  };
+
+  const handleDeleteForEveryone = (msg) => {
+    if (!msg?._id || !roomid) return;
+    socket.emit("delete-for-everyone", {
+      msgId: msg._id,
+      roomid: roomid,
+      userId: myId,
+    });
+    setHandledata((prev) => prev.filter((m) => String(m._id) !== String(msg._id)));
+    setDeleteModalMsg(null);
+  };
+
+  const handleDeleteForMe = (msg) => {
+    if (!msg?._id) return;
+    socket.emit("delete-for-me", {
+      msgId: msg._id,
+      userId: myId,
+    });
+    setHandledata((prev) => prev.filter((m) => String(m._id) !== String(msg._id)));
+    setDeleteModalMsg(null);
   };
 
   const myId = currentuser?._id || currentuser?.U?._id;
@@ -318,13 +341,25 @@ const Home = () => {
       }
     };
 
+    const handleMessageDeletedEveryone = ({ msgId }) => {
+      setHandledata((prev) => prev.filter((m) => String(m._id) !== String(msgId)));
+    };
+
+    const handleMessageDeletedForMe = ({ msgId }) => {
+      setHandledata((prev) => prev.filter((m) => String(m._id) !== String(msgId)));
+    };
+
     socket.on("oldmsg", receiveOldMessages);
     socket.on("messages", receiveMessage);
+    socket.on("message-deleted-everyone", handleMessageDeletedEveryone);
+    socket.on("message-deleted-for-me", handleMessageDeletedForMe);
     socket.emit("getmsg", roomid);
 
     return () => {
       socket.off("oldmsg", receiveOldMessages);
       socket.off("messages", receiveMessage);
+      socket.off("message-deleted-everyone", handleMessageDeletedEveryone);
+      socket.off("message-deleted-for-me", handleMessageDeletedForMe);
     };
   }, [roomid, targetId, myId]);
 
@@ -572,6 +607,7 @@ const Home = () => {
               {/* Message Bubbles */}
               {handledata
                 .filter((msg) => String(msg.roomid) === String(roomid))
+                .filter((msg) => !msg.deletedFor?.includes(String(myId)))
                 .map((msg, index) => {
                   const isMe = String(msg.senderid) === String(myId);
 
@@ -600,12 +636,24 @@ const Home = () => {
                       className={`flex ${isMe ? "justify-end" : "justify-start"} my-1`}
                     >
                       <div
-                        className={`relative px-3 py-1.5 max-w-[85%] md:max-w-md shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] text-[15px] leading-snug ${
+                        className={`relative group px-3 py-1.5 max-w-[85%] md:max-w-md shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] text-[15px] leading-snug ${
                           isMe
                             ? "bg-[#DCF8C6] text-black rounded-2xl rounded-tr-xs"
                             : "bg-white text-black rounded-2xl rounded-tl-xs"
                         }`}
                       >
+                        {/* WhatsApp-Style Delete Message Button on Hover / Mobile */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteModalMsg(msg);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 p-1 rounded-full hover:bg-black/10 text-[#8e8e93] hover:text-red-500 cursor-pointer z-10"
+                          title="Delete message"
+                        >
+                          <IoTrashOutline className="w-3.5 h-3.5" />
+                        </button>
                         {/* Image Attachments */}
                         {hasImages && (
                           <div className="flex flex-col gap-1.5 mb-1">
@@ -828,6 +876,57 @@ const Home = () => {
               alt="Preview"
               className="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl border border-white/10"
             />
+          </div>
+        </div>
+      )}
+      {/* ================= WHATSAPP STYLE DELETE MESSAGE MODAL ================= */}
+      {deleteModalMsg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setDeleteModalMsg(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl flex flex-col gap-4 text-center border border-[#e5e5ea]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 mx-auto flex items-center justify-center">
+              <IoTrashOutline className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-[17px] font-semibold text-black mb-1">
+                Delete message?
+              </h3>
+              <p className="text-[13px] text-[#8e8e93]">
+                {String(deleteModalMsg.senderid) === String(myId)
+                  ? "You can delete this message for everyone or just for yourself."
+                  : "You can delete this message for yourself."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              {String(deleteModalMsg.senderid) === String(myId) && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteForEveryone(deleteModalMsg)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-[14px] transition-colors cursor-pointer shadow-xs active:scale-98"
+                >
+                  Delete for everyone
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleDeleteForMe(deleteModalMsg)}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#f0f2f5] hover:bg-[#e4e6eb] text-black font-medium text-[14px] transition-colors cursor-pointer active:scale-98"
+              >
+                Delete for me
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteModalMsg(null)}
+                className="w-full py-2.5 px-4 rounded-xl text-[#8e8e93] hover:text-black font-medium text-[14px] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -82,9 +82,9 @@ io.on("connection", (socket) => {
                 }
 
                 // Send current unread counts & latest messages summary for sidebar
-                // Only count messages that are NOT yet seen (exclude status:"seen" AND seenmsg:true)
+                // Only count messages that are NOT yet seen and not deleted for this user
                 const unreadSummary = await SocketData.aggregate([
-                    { $match: { receiveid: userId, status: { $ne: "seen" }, seenmsg: { $ne: true } } },
+                    { $match: { receiveid: userId, status: { $ne: "seen" }, seenmsg: { $ne: true }, deletedFor: { $ne: userId } } },
                     { $group: { _id: "$senderid", count: { $sum: 1 } } }
                 ]);
 
@@ -110,7 +110,11 @@ io.on("connection", (socket) => {
     // Fetch conversation history
     socket.on("getmsg", async (roomid) => {
         try {
-            const oldMsg = await SocketData.find({ roomid: String(roomid) }).sort({ createdAt: 1 })
+            const query = { roomid: String(roomid) };
+            if (socket.userId) {
+                query.deletedFor = { $ne: String(socket.userId) };
+            }
+            const oldMsg = await SocketData.find(query).sort({ createdAt: 1 })
             socket.emit("oldmsg", oldMsg)
         } catch (error) {
             console.error("Error fetching old messages:", error);
@@ -172,6 +176,37 @@ io.on("connection", (socket) => {
             });
         } catch (error) {
             console.error("Error marking messages as seen:", error);
+        }
+    })
+
+    // Delete message for me only (hide from this user, keep in DB)
+    socket.on("delete-for-me", async ({ msgId, userId }) => {
+        try {
+            if (!msgId || !userId) return;
+            await SocketData.findByIdAndUpdate(msgId, {
+                $addToSet: { deletedFor: String(userId) }
+            });
+            // Only notify the requesting user's sockets
+            io.to(String(userId)).emit("message-deleted-for-me", { msgId, userId: String(userId) });
+        } catch (error) {
+            console.error("Error deleting message for me:", error);
+        }
+    })
+
+    // Delete message for everyone (remove from DB entirely)
+    socket.on("delete-for-everyone", async ({ msgId, roomid, userId }) => {
+        try {
+            if (!msgId || !roomid || !userId) return;
+            // Only the sender can delete for everyone
+            const msg = await SocketData.findById(msgId);
+            if (!msg || String(msg.senderid) !== String(userId)) return;
+            await SocketData.findByIdAndDelete(msgId);
+            // Broadcast deletion to all users in this room + both personal rooms
+            io.to(String(roomid)).emit("message-deleted-everyone", { msgId, roomid: String(roomid) });
+            io.to(String(msg.receiveid)).emit("message-deleted-everyone", { msgId, roomid: String(roomid) });
+            io.to(String(msg.senderid)).emit("message-deleted-everyone", { msgId, roomid: String(roomid) });
+        } catch (error) {
+            console.error("Error deleting message for everyone:", error);
         }
     })
 
