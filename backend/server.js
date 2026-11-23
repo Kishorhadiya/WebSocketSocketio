@@ -21,17 +21,19 @@ app.use(express.json())
 const server=createServer(app)
 app.get("/",(req,res)=>{
     res.send("Hello World")
+    
 })
 const io=new Server(server,{
     cors:{
         origin: allowedOrigin,
+
         credentials: true,
     }
 })
     
 
  io.on("connection",(socket)=>{
-    socket.on("user-ID",(id)=>{
+    socket.on("user-id",(id)=>{
         socket.join(id);
     })
 
