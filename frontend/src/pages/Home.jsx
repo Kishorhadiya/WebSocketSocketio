@@ -78,7 +78,18 @@ const Home = () => {
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const isAtBottomRef = useRef(true);
+  const initialScrollDoneRef = useRef(false);
   const notifTimeoutRef = useRef({});
+  const usersRef = useRef(users);
+  const chatuserRef = useRef(chatuser);
+
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
+
+  useEffect(() => {
+    chatuserRef.current = chatuser;
+  }, [chatuser]);
 
   // Auto-dismiss notifications after 4 seconds
   const addNotification = (notif) => {
@@ -210,18 +221,17 @@ const Home = () => {
     }, 50);
   };
 
-  // Initial setup & reconnect handler
+  // Load all users once on mount
   useEffect(() => {
     getAllUser();
+  }, []);
+
+  // Global socket setup & background notification listener (runs once per user login)
+  useEffect(() => {
+    if (!myId) return;
 
     const handleConnect = () => {
-      if (myId) {
-        socket.emit("user-id", myId);
-      }
-      if (roomid) {
-        socket.emit("roomid", roomid);
-        socket.emit("getmsg", roomid);
-      }
+      socket.emit("user-id", myId);
     };
 
     const handleOnlineUsers = (usersList) => {
@@ -233,6 +243,111 @@ const Home = () => {
     const handleUnreadSummary = (summary) => {
       if (summary && typeof summary === "object") {
         setUnreadCounts(summary);
+      }
+    };
+
+    // Global listener for popup notifications from ANY sender
+    const handleGlobalMessage = (data) => {
+      if (!data || String(data.senderid) === String(myId)) return;
+      if (String(data.receiveid) === String(myId)) {
+        const currentTargetId = chatuserRef.current?._id || chatuserRef.current?.U?._id;
+        const currentRoomid =
+          myId && currentTargetId
+            ? [String(myId), String(currentTargetId)].sort().join("_")
+            : null;
+        if (String(data.roomid) !== String(currentRoomid)) {
+          const sender = usersRef.current.find((u) => String(u._id) === String(data.senderid));
+          const senderName = sender?.username || "New Message";
+          const msgPreview = data.msg
+            ? data.msg.length > 60
+              ? data.msg.substring(0, 60) + "..."
+              : data.msg
+            : "📎 Sent an attachment";
+          addNotification({ senderName, msg: msgPreview, senderId: data.senderid });
+        }
+      }
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("get-online-users", handleOnlineUsers);
+    socket.on("unread-summary", handleUnreadSummary);
+    socket.on("notification-msg", handleGlobalMessage);
+
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("get-online-users", handleOnlineUsers);
+      socket.off("unread-summary", handleUnreadSummary);
+      socket.off("notification-msg", handleGlobalMessage);
+    };
+  }, [myId]);
+
+  // Room messages listener (only runs when active room changes)
+  useEffect(() => {
+    if (!roomid) {
+      setHandledata([]);
+      return;
+    }
+
+    setHandledata([]);
+    initialScrollDoneRef.current = false;
+    isAtBottomRef.current = true;
+
+    socket.emit("roomid", roomid);
+
+    // Clear unread badge for this contact
+    if (targetId) {
+      setUnreadCounts((prev) => ({ ...prev, [String(targetId)]: 0 }));
+    }
+
+    // Mark messages as seen
+    socket.emit("mark-seen", { roomid, readerId: myId });
+
+    const receiveOldMessages = (data) => {
+      if (Array.isArray(data)) {
+        setHandledata(data);
+        socket.emit("mark-seen", { roomid, readerId: myId });
+        // Scroll to bottom ONLY ONCE when chat history first loads
+        if (!initialScrollDoneRef.current) {
+          setTimeout(() => {
+            scrollToBottom("auto");
+            isAtBottomRef.current = true;
+            initialScrollDoneRef.current = true;
+          }, 80);
+        }
+      }
+    };
+
+    const receiveMessage = (data) => {
+      if (String(data.roomid) === String(roomid)) {
+        setHandledata((prev) => {
+          const isDuplicate = prev.some(
+            (m) => m._id && data._id && String(m._id) === String(data._id)
+          );
+          if (isDuplicate) return prev;
+          return [...prev, data];
+        });
+
+        if (String(data.receiveid) === String(myId)) {
+          socket.emit("mark-seen", { roomid, readerId: myId });
+        }
+
+        // Only auto-scroll down if user is ALREADY at the bottom or sent by me
+        if (isAtBottomRef.current || String(data.senderid) === String(myId)) {
+          setTimeout(() => {
+            scrollToBottom();
+          }, 60);
+        }
+      } else {
+        if (String(data.receiveid) === String(myId)) {
+          setUnreadCounts((prev) => ({
+            ...prev,
+            [String(data.senderid)]: (prev[String(data.senderid)] || 0) + 1,
+          }));
+        }
       }
     };
 
@@ -258,111 +373,6 @@ const Home = () => {
       }
     };
 
-    // Global listener for popup notifications from ANY sender
-    const handleGlobalMessage = (data) => {
-      if (!data || String(data.senderid) === String(myId)) return;
-      // Only show notification if message is for me AND not from the currently open chat
-      if (String(data.receiveid) === String(myId)) {
-        const currentRoomid = myId && targetId
-          ? [String(myId), String(targetId)].sort().join("_")
-          : null;
-        if (String(data.roomid) !== String(currentRoomid)) {
-          // Find sender name from users list
-          const sender = users.find((u) => String(u._id) === String(data.senderid));
-          const senderName = sender?.username || "New Message";
-          const msgPreview = data.msg
-            ? data.msg.length > 60 ? data.msg.substring(0, 60) + "..." : data.msg
-            : "📎 Sent an attachment";
-          addNotification({ senderName, msg: msgPreview, senderId: data.senderid });
-        }
-      }
-    };
-
-    socket.on("connect", handleConnect);
-    socket.on("get-online-users", handleOnlineUsers);
-    socket.on("unread-summary", handleUnreadSummary);
-    socket.on("messages-delivered", handleMessagesDelivered);
-    socket.on("messages-seen", handleMessagesSeen);
-    socket.on("notification-msg", handleGlobalMessage);
-
-    if (socket.connected) {
-      handleConnect();
-    }
-
-    return () => {
-      socket.off("connect", handleConnect);
-      socket.off("get-online-users", handleOnlineUsers);
-      socket.off("unread-summary", handleUnreadSummary);
-      socket.off("messages-delivered", handleMessagesDelivered);
-      socket.off("messages-seen", handleMessagesSeen);
-      socket.off("notification-msg", handleGlobalMessage);
-    };
-  }, [myId, roomid, users, targetId]);
-
-  // Room messages listener
-  useEffect(() => {
-    if (!roomid) {
-      setHandledata([]);
-      return;
-    }
-
-    setHandledata([]);
-    socket.emit("roomid", roomid);
-
-    // Clear unread badge for this contact
-    if (targetId) {
-      setUnreadCounts((prev) => ({ ...prev, [String(targetId)]: 0 }));
-    }
-
-    // Mark messages as seen
-    socket.emit("mark-seen", { roomid, readerId: myId });
-
-    const receiveOldMessages = (data) => {
-      if (Array.isArray(data)) {
-        setHandledata(data);
-        // Mark all incoming messages in this chat as seen
-        socket.emit("mark-seen", { roomid, readerId: myId });
-        // Scroll to bottom once on initial load of chat history
-        setTimeout(() => {
-          scrollToBottom("auto");
-          isAtBottomRef.current = true;
-        }, 60);
-      }
-    };
-
-    const receiveMessage = (data) => {
-      if (String(data.roomid) === String(roomid)) {
-        setHandledata((prev) => {
-          const isDuplicate = prev.some(
-            (m) => m._id && data._id && String(m._id) === String(data._id)
-          );
-          if (isDuplicate) return prev;
-          return [...prev, data];
-        });
-
-        // If message is for me and chat is open, immediately mark as seen
-        if (String(data.receiveid) === String(myId)) {
-          socket.emit("mark-seen", { roomid, readerId: myId });
-        }
-
-        // Only auto-scroll down if user is already near bottom or sent by me
-        // (Prevents jarring scroll jump when user has scrolled up to read or delete)
-        if (isAtBottomRef.current || String(data.senderid) === String(myId)) {
-          setTimeout(() => {
-            scrollToBottom();
-          }, 60);
-        }
-      } else {
-        // If message is for me but from another user, increment unread count
-        if (String(data.receiveid) === String(myId)) {
-          setUnreadCounts((prev) => ({
-            ...prev,
-            [String(data.senderid)]: (prev[String(data.senderid)] || 0) + 1,
-          }));
-        }
-      }
-    };
-
     const handleMessageDeletedEveryone = ({ msgId }) => {
       setHandledata((prev) => prev.filter((m) => String(m._id) !== String(msgId)));
     };
@@ -373,6 +383,8 @@ const Home = () => {
 
     socket.on("oldmsg", receiveOldMessages);
     socket.on("messages", receiveMessage);
+    socket.on("messages-delivered", handleMessagesDelivered);
+    socket.on("messages-seen", handleMessagesSeen);
     socket.on("message-deleted-everyone", handleMessageDeletedEveryone);
     socket.on("message-deleted-for-me", handleMessageDeletedForMe);
     socket.emit("getmsg", roomid);
@@ -380,6 +392,8 @@ const Home = () => {
     return () => {
       socket.off("oldmsg", receiveOldMessages);
       socket.off("messages", receiveMessage);
+      socket.off("messages-delivered", handleMessagesDelivered);
+      socket.off("messages-seen", handleMessagesSeen);
       socket.off("message-deleted-everyone", handleMessageDeletedEveryone);
       socket.off("message-deleted-for-me", handleMessageDeletedForMe);
     };
