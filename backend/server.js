@@ -47,11 +47,27 @@ const io = new Server(server, {
     }
 })
 
+// Track online users: userId -> Set of socket.ids
+const onlineUsers = new Map();
+
 io.on("connection", (socket) => {
+    // Immediately send the list of currently online users to the connecting client
+    socket.emit("get-online-users", Array.from(onlineUsers.keys()));
+
     // User registers their personal ID room
     socket.on("user-id", (id) => {
         if (id) {
-            socket.join(String(id));
+            const userId = String(id);
+            socket.userId = userId;
+            socket.join(userId);
+
+            if (!onlineUsers.has(userId)) {
+                onlineUsers.set(userId, new Set());
+            }
+            onlineUsers.get(userId).add(socket.id);
+
+            // Broadcast updated online users list to all connected clients
+            io.emit("get-online-users", Array.from(onlineUsers.keys()));
         }
     })
 
@@ -93,6 +109,19 @@ io.on("connection", (socket) => {
             }
         } catch (error) {
             console.error("Error saving socket message:", error);
+        }
+    })
+
+    // Handle user disconnect (e.g. closed browser, logged out, or lost connection)
+    socket.on("disconnect", () => {
+        if (socket.userId && onlineUsers.has(socket.userId)) {
+            const userSockets = onlineUsers.get(socket.userId);
+            userSockets.delete(socket.id);
+            if (userSockets.size === 0) {
+                onlineUsers.delete(socket.userId);
+            }
+            // Broadcast updated online users list to all remaining clients
+            io.emit("get-online-users", Array.from(onlineUsers.keys()));
         }
     })
 })

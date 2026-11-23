@@ -68,6 +68,7 @@ const Home = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [previewImage, setPreviewImage] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
   const messagesEndRef = useRef(null);
 
@@ -168,7 +169,14 @@ const Home = () => {
       }
     };
 
+    const handleOnlineUsers = (usersList) => {
+      if (Array.isArray(usersList)) {
+        setOnlineUsers(usersList.map(String));
+      }
+    };
+
     socket.on("connect", handleConnect);
+    socket.on("get-online-users", handleOnlineUsers);
 
     if (socket.connected) {
       handleConnect();
@@ -176,6 +184,7 @@ const Home = () => {
 
     return () => {
       socket.off("connect", handleConnect);
+      socket.off("get-online-users", handleOnlineUsers);
     };
   }, [myId, roomid]);
 
@@ -290,6 +299,7 @@ const Home = () => {
             filteredUsers.map((user) => {
               const isSelected = targetId === user._id;
               const avatarBg = getAvatarColor(user.username || user.email);
+              const isOnline = onlineUsers.includes(String(user._id));
 
               return (
                 <div
@@ -299,11 +309,19 @@ const Home = () => {
                     isSelected ? "bg-[#eef2f5]" : "hover:bg-[#f9f9fb]"
                   }`}
                 >
-                  {/* Contact Avatar */}
-                  <div
-                    className={`w-12 h-12 rounded-full ${avatarBg} text-white font-semibold text-lg flex items-center justify-center shrink-0 shadow-2xs mr-3`}
-                  >
-                    {user.username ? user.username.charAt(0).toUpperCase() : "U"}
+                  {/* Contact Avatar with real-time green online dot */}
+                  <div className="relative mr-3 shrink-0">
+                    <div
+                      className={`w-12 h-12 rounded-full ${avatarBg} text-white font-semibold text-lg flex items-center justify-center shadow-2xs`}
+                    >
+                      {user.username ? user.username.charAt(0).toUpperCase() : "U"}
+                    </div>
+                    {isOnline && (
+                      <span
+                        className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#34C759] border-2 border-white rounded-full"
+                        title="Online"
+                      />
+                    )}
                   </div>
 
                   {/* Contact Details */}
@@ -312,8 +330,12 @@ const Home = () => {
                       <h3 className="text-[16px] font-semibold text-black truncate">
                         {user.username}
                       </h3>
-                      <span className="text-[11px] text-[#34C759] font-medium shrink-0">
-                        Online
+                      <span
+                        className={`text-[11px] font-medium shrink-0 ${
+                          isOnline ? "text-[#34C759]" : "text-[#8e8e93]"
+                        }`}
+                      >
+                        {isOnline ? "Online" : "Offline"}
                       </span>
                     </div>
 
@@ -356,21 +378,35 @@ const Home = () => {
 
             {chatuser ? (
               <div className="flex items-center gap-2.5 min-w-0">
-                <div
-                  className={`w-9 h-9 rounded-full ${getAvatarColor(
-                    chatuser.username
-                  )} text-white font-semibold text-sm flex items-center justify-center shrink-0 shadow-2xs`}
-                >
-                  {chatuser.username
-                    ? chatuser.username.charAt(0).toUpperCase()
-                    : "U"}
+                <div className="relative shrink-0">
+                  <div
+                    className={`w-9 h-9 rounded-full ${getAvatarColor(
+                      chatuser.username
+                    )} text-white font-semibold text-sm flex items-center justify-center shadow-2xs`}
+                  >
+                    {chatuser.username
+                      ? chatuser.username.charAt(0).toUpperCase()
+                      : "U"}
+                  </div>
+                  {onlineUsers.includes(String(chatuser._id)) && (
+                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#34C759] border border-white rounded-full" />
+                  )}
                 </div>
                 <div className="truncate">
                   <h2 className="font-semibold text-[15px] text-black leading-tight truncate">
                     {chatuser.username}
                   </h2>
-                  <p className="text-[11px] text-[#34C759] font-medium leading-none mt-0.5">
-                    Online
+                  <p
+                    className={`text-[11px] font-medium leading-none mt-0.5 flex items-center gap-1 ${
+                      onlineUsers.includes(String(chatuser._id))
+                        ? "text-[#34C759]"
+                        : "text-[#8e8e93]"
+                    }`}
+                  >
+                    {onlineUsers.includes(String(chatuser._id)) && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#34C759]" />
+                    )}
+                    {onlineUsers.includes(String(chatuser._id)) ? "Online" : "Offline"}
                   </p>
                 </div>
               </div>
