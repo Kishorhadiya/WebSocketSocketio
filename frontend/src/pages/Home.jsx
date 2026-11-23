@@ -76,6 +76,8 @@ const Home = () => {
   const [deleteModalMsg, setDeleteModalMsg] = useState(null);
 
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const isAtBottomRef = useRef(true);
   const notifTimeoutRef = useRef({});
 
   // Auto-dismiss notifications after 4 seconds
@@ -135,14 +137,17 @@ const Home = () => {
         u.email?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-  // Auto-scroll to bottom of chat
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Scroll handling: only auto-scroll if user is near bottom, sending a message, or on initial load
+  const scrollToBottom = (behavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [handledata]);
+  const handleScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    // Consider at bottom if within 120px of bottom
+    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 120;
+  };
 
   // Handle file upload API call
   const handlefunc = async () => {
@@ -199,6 +204,10 @@ const Home = () => {
 
     setInputmsg("");
     setSelectedFiles([]);
+    setTimeout(() => {
+      scrollToBottom();
+      isAtBottomRef.current = true;
+    }, 50);
   };
 
   // Initial setup & reconnect handler
@@ -313,6 +322,11 @@ const Home = () => {
         setHandledata(data);
         // Mark all incoming messages in this chat as seen
         socket.emit("mark-seen", { roomid, readerId: myId });
+        // Scroll to bottom once on initial load of chat history
+        setTimeout(() => {
+          scrollToBottom("auto");
+          isAtBottomRef.current = true;
+        }, 60);
       }
     };
 
@@ -329,6 +343,14 @@ const Home = () => {
         // If message is for me and chat is open, immediately mark as seen
         if (String(data.receiveid) === String(myId)) {
           socket.emit("mark-seen", { roomid, readerId: myId });
+        }
+
+        // Only auto-scroll down if user is already near bottom or sent by me
+        // (Prevents jarring scroll jump when user has scrolled up to read or delete)
+        if (isAtBottomRef.current || String(data.senderid) === String(myId)) {
+          setTimeout(() => {
+            scrollToBottom();
+          }, 60);
         }
       } else {
         // If message is for me but from another user, increment unread count
@@ -587,6 +609,8 @@ const Home = () => {
           <>
             {/* Messages Scroll Area with WhatsApp Wallpaper */}
             <div
+              ref={chatContainerRef}
+              onScroll={handleScroll}
               className="flex-1 overflow-y-auto p-3 md:p-6 space-y-2 relative"
               style={{
                 backgroundColor: "#efeae2",
