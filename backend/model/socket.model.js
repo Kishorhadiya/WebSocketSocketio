@@ -39,6 +39,12 @@ const SocketUserSchema = mongoose.Schema({
       },
     },
   ],
+  status: {
+    type: String,
+    enum: ["sent", "delivered", "seen"],
+    default: "sent",
+    index: true,
+  },
   seenmsg: {
     type: Boolean,
     default: false,

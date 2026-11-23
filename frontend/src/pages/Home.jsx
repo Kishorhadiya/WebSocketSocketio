@@ -7,6 +7,7 @@ import {
   IoSearchOutline,
   IoAdd,
   IoSend,
+  IoCheckmark,
   IoCheckmarkDone,
   IoChevronForward,
   IoDocumentTextOutline,
@@ -69,6 +70,7 @@ const Home = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [previewImage, setPreviewImage] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [unreadCounts, setUnreadCounts] = useState({});
 
   const messagesEndRef = useRef(null);
 
@@ -175,8 +177,39 @@ const Home = () => {
       }
     };
 
+    const handleUnreadSummary = (summary) => {
+      if (summary && typeof summary === "object") {
+        setUnreadCounts(summary);
+      }
+    };
+
+    const handleMessagesDelivered = ({ receiveid }) => {
+      setHandledata((prev) =>
+        prev.map((msg) =>
+          String(msg.receiveid) === String(receiveid) && msg.status === "sent"
+            ? { ...msg, status: "delivered" }
+            : msg
+        )
+      );
+    };
+
+    const handleMessagesSeen = ({ roomid: seenRoom, readerId }) => {
+      if (String(seenRoom) === String(roomid)) {
+        setHandledata((prev) =>
+          prev.map((msg) =>
+            String(msg.receiveid) === String(readerId)
+              ? { ...msg, status: "seen", seenmsg: true }
+              : msg
+          )
+        );
+      }
+    };
+
     socket.on("connect", handleConnect);
     socket.on("get-online-users", handleOnlineUsers);
+    socket.on("unread-summary", handleUnreadSummary);
+    socket.on("messages-delivered", handleMessagesDelivered);
+    socket.on("messages-seen", handleMessagesSeen);
 
     if (socket.connected) {
       handleConnect();
@@ -185,6 +218,9 @@ const Home = () => {
     return () => {
       socket.off("connect", handleConnect);
       socket.off("get-online-users", handleOnlineUsers);
+      socket.off("unread-summary", handleUnreadSummary);
+      socket.off("messages-delivered", handleMessagesDelivered);
+      socket.off("messages-seen", handleMessagesSeen);
     };
   }, [myId, roomid]);
 
@@ -198,9 +234,19 @@ const Home = () => {
     setHandledata([]);
     socket.emit("roomid", roomid);
 
+    // Clear unread badge for this contact
+    if (targetId) {
+      setUnreadCounts((prev) => ({ ...prev, [String(targetId)]: 0 }));
+    }
+
+    // Mark messages as seen
+    socket.emit("mark-seen", { roomid, readerId: myId });
+
     const receiveOldMessages = (data) => {
       if (Array.isArray(data)) {
         setHandledata(data);
+        // Mark all incoming messages in this chat as seen
+        socket.emit("mark-seen", { roomid, readerId: myId });
       }
     };
 
@@ -213,6 +259,19 @@ const Home = () => {
           if (isDuplicate) return prev;
           return [...prev, data];
         });
+
+        // If message is for me and chat is open, immediately mark as seen
+        if (String(data.receiveid) === String(myId)) {
+          socket.emit("mark-seen", { roomid, readerId: myId });
+        }
+      } else {
+        // If message is for me but from another user, increment unread count
+        if (String(data.receiveid) === String(myId)) {
+          setUnreadCounts((prev) => ({
+            ...prev,
+            [String(data.senderid)]: (prev[String(data.senderid)] || 0) + 1,
+          }));
+        }
       }
     };
 
@@ -224,7 +283,7 @@ const Home = () => {
       socket.off("oldmsg", receiveOldMessages);
       socket.off("messages", receiveMessage);
     };
-  }, [roomid]);
+  }, [roomid, targetId, myId]);
 
   return (
     <div className="h-screen w-screen flex bg-[#f0f2f5] font-[-apple-system,BlinkMacSystemFont,'SF_Pro_Text','Segoe_UI',Roboto,Helvetica,Arial,sans-serif] text-[#000000] overflow-hidden select-none">
@@ -300,6 +359,7 @@ const Home = () => {
               const isSelected = targetId === user._id;
               const avatarBg = getAvatarColor(user.username || user.email);
               const isOnline = onlineUsers.includes(String(user._id));
+              const unreadCount = unreadCounts[String(user._id)] || 0;
 
               return (
                 <div
@@ -340,11 +400,19 @@ const Home = () => {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center text-[13px] text-[#8e8e93] truncate">
-                        <IoCheckmarkDone className="w-3.5 h-3.5 text-[#34B7F1] shrink-0 mr-1" />
+                      <div className="flex items-center text-[13px] text-[#8e8e93] truncate mr-2">
                         <span className="truncate">{user.email}</span>
                       </div>
-                      <IoChevronForward className="w-4 h-4 text-[#c7c7cc] shrink-0 ml-1" />
+
+                      {/* WhatsApp Style Unread Messages Counter Badge */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {unreadCount > 0 && (
+                          <span className="min-w-[20px] h-5 px-1.5 bg-[#25D366] text-white text-[11px] font-bold rounded-full flex items-center justify-center shrink-0 shadow-2xs">
+                            {unreadCount}
+                          </span>
+                        )}
+                        <IoChevronForward className="w-4 h-4 text-[#c7c7cc]" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -518,11 +586,28 @@ const Home = () => {
                           </div>
                         )}
 
-                        {/* Timestamp & Double Checkmarks (bottom right corner of bubble) */}
+                        {/* Timestamp & Real-Time WhatsApp Ticks (Single Grey | Double Grey | Double Blue) */}
                         <div className="absolute right-2 bottom-1 flex items-center gap-1 text-[11px] text-[#8e8e93]">
                           <span>{formatTime(msg.createdAt) || "10:10"}</span>
                           {isMe && (
-                            <IoCheckmarkDone className="w-3.5 h-3.5 text-[#34B7F1]" />
+                            <span className="ml-0.5 inline-flex items-center">
+                              {msg.status === "seen" || msg.seenmsg ? (
+                                <IoCheckmarkDone
+                                  className="w-3.5 h-3.5 text-[#34B7F1]"
+                                  title="Seen (Read)"
+                                />
+                              ) : msg.status === "delivered" ? (
+                                <IoCheckmarkDone
+                                  className="w-3.5 h-3.5 text-[#8e8e93]"
+                                  title="Delivered (User online)"
+                                />
+                              ) : (
+                                <IoCheckmark
+                                  className="w-3.5 h-3.5 text-[#8e8e93]"
+                                  title="Sent (User offline)"
+                                />
+                              )}
+                            </span>
                           )}
                         </div>
                       </div>

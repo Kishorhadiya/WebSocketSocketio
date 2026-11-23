@@ -55,7 +55,7 @@ io.on("connection", (socket) => {
     socket.emit("get-online-users", Array.from(onlineUsers.keys()));
 
     // User registers their personal ID room
-    socket.on("user-id", (id) => {
+    socket.on("user-id", async (id) => {
         if (id) {
             const userId = String(id);
             socket.userId = userId;
@@ -68,6 +68,34 @@ io.on("connection", (socket) => {
 
             // Broadcast updated online users list to all connected clients
             io.emit("get-online-users", Array.from(onlineUsers.keys()));
+
+            // User came online! Mark all "sent" messages addressed to this user as "delivered"
+            try {
+                const updateRes = await SocketData.updateMany(
+                    { receiveid: userId, status: "sent" },
+                    { $set: { status: "delivered" } }
+                );
+
+                if (updateRes.modifiedCount > 0) {
+                    // Notify senders that their messages are now delivered (double grey tick)
+                    io.emit("messages-delivered", { receiveid: userId });
+                }
+
+                // Send current unread counts & latest messages summary for sidebar
+                const unreadSummary = await SocketData.aggregate([
+                    { $match: { receiveid: userId, seenmsg: false } },
+                    { $group: { _id: "$senderid", count: { $sum: 1 } } }
+                ]);
+
+                const unreadMap = {};
+                unreadSummary.forEach(item => {
+                    unreadMap[item._id] = item.count;
+                });
+
+                socket.emit("unread-summary", unreadMap);
+            } catch (err) {
+                console.error("Error updating message delivery status:", err);
+            }
         }
     })
 
@@ -92,23 +120,55 @@ io.on("connection", (socket) => {
     // Send new message
     socket.on("user-msg", async (data) => {
         try {
+            const recipientId = String(data.receiveid);
+            const isRecipientOnline = onlineUsers.has(recipientId);
+            const initialStatus = isRecipientOnline ? "delivered" : "sent";
+
             const savedMsg = await SocketData.create({
                 roomid: String(data.roomid),
                 msg: data.msg || "",
-                receiveid: String(data.receiveid),
+                receiveid: recipientId,
                 senderid: String(data.senderid),
-                file: data.file || []
+                file: data.file || [],
+                status: initialStatus,
+                seenmsg: false
             })
 
             // Broadcast to all participants in this conversation room
             io.to(String(data.roomid)).emit("messages", savedMsg);
 
             // Also deliver directly to receiver's personal room if different
-            if (data.receiveid && String(data.receiveid) !== String(data.senderid)) {
-                io.to(String(data.receiveid)).emit("messages", savedMsg);
+            if (recipientId && recipientId !== String(data.senderid)) {
+                io.to(recipientId).emit("messages", savedMsg);
             }
         } catch (error) {
             console.error("Error saving socket message:", error);
+        }
+    })
+
+    // Mark messages in a room as seen (Double Blue Tick)
+    socket.on("mark-seen", async ({ roomid, readerId }) => {
+        try {
+            if (!roomid || !readerId) return;
+
+            await SocketData.updateMany(
+                {
+                    roomid: String(roomid),
+                    receiveid: String(readerId),
+                    status: { $ne: "seen" }
+                },
+                {
+                    $set: { status: "seen", seenmsg: true }
+                }
+            );
+
+            // Notify everyone in the room that messages have been seen by readerId
+            io.to(String(roomid)).emit("messages-seen", {
+                roomid: String(roomid),
+                readerId: String(readerId)
+            });
+        } catch (error) {
+            console.error("Error marking messages as seen:", error);
         }
     })
 
