@@ -71,8 +71,29 @@ const Home = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [unreadCounts, setUnreadCounts] = useState({});
+  const [notifications, setNotifications] = useState([]);
 
   const messagesEndRef = useRef(null);
+  const notifTimeoutRef = useRef({});
+
+  // Auto-dismiss notifications after 4 seconds
+  const addNotification = (notif) => {
+    const id = Date.now() + Math.random();
+    const newNotif = { ...notif, id };
+    setNotifications((prev) => [...prev.slice(-4), newNotif]); // keep max 5
+    notifTimeoutRef.current[id] = setTimeout(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      delete notifTimeoutRef.current[id];
+    }, 4000);
+  };
+
+  const dismissNotification = (id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (notifTimeoutRef.current[id]) {
+      clearTimeout(notifTimeoutRef.current[id]);
+      delete notifTimeoutRef.current[id];
+    }
+  };
 
   const myId = currentuser?._id || currentuser?.U?._id;
   const targetId = chatuser?._id || chatuser?.U?._id;
@@ -205,11 +226,32 @@ const Home = () => {
       }
     };
 
+    // Global listener for popup notifications from ANY sender
+    const handleGlobalMessage = (data) => {
+      if (!data || String(data.senderid) === String(myId)) return;
+      // Only show notification if message is for me AND not from the currently open chat
+      if (String(data.receiveid) === String(myId)) {
+        const currentRoomid = myId && targetId
+          ? [String(myId), String(targetId)].sort().join("_")
+          : null;
+        if (String(data.roomid) !== String(currentRoomid)) {
+          // Find sender name from users list
+          const sender = users.find((u) => String(u._id) === String(data.senderid));
+          const senderName = sender?.username || "New Message";
+          const msgPreview = data.msg
+            ? data.msg.length > 60 ? data.msg.substring(0, 60) + "..." : data.msg
+            : "📎 Sent an attachment";
+          addNotification({ senderName, msg: msgPreview, senderId: data.senderid });
+        }
+      }
+    };
+
     socket.on("connect", handleConnect);
     socket.on("get-online-users", handleOnlineUsers);
     socket.on("unread-summary", handleUnreadSummary);
     socket.on("messages-delivered", handleMessagesDelivered);
     socket.on("messages-seen", handleMessagesSeen);
+    socket.on("notification-msg", handleGlobalMessage);
 
     if (socket.connected) {
       handleConnect();
@@ -221,8 +263,9 @@ const Home = () => {
       socket.off("unread-summary", handleUnreadSummary);
       socket.off("messages-delivered", handleMessagesDelivered);
       socket.off("messages-seen", handleMessagesSeen);
+      socket.off("notification-msg", handleGlobalMessage);
     };
-  }, [myId, roomid]);
+  }, [myId, roomid, users, targetId]);
 
   // Room messages listener
   useEffect(() => {
@@ -695,6 +738,62 @@ const Home = () => {
           </>
         )}
       </div>
+
+      {/* ================= NOTIFICATION POPUP TOASTS ================= */}
+      {notifications.length > 0 && (
+        <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+          {notifications.map((notif) => {
+            const avatarBg = getAvatarColor(notif.senderName);
+            return (
+              <div
+                key={notif.id}
+                className="pointer-events-auto bg-white rounded-2xl shadow-xl border border-[#e5e5ea]/60 p-3 flex items-start gap-3 cursor-pointer hover:bg-[#f9f9fb] transition-colors"
+                style={{ animation: "slideInRight 0.3s ease-out" }}
+                onClick={() => {
+                  const sender = users.find((u) => String(u._id) === String(notif.senderId));
+                  if (sender) {
+                    setChatuser(sender);
+                  }
+                  dismissNotification(notif.id);
+                }}
+              >
+                <div
+                  className={`w-10 h-10 rounded-full ${avatarBg} text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-sm`}
+                >
+                  {notif.senderName ? notif.senderName.charAt(0).toUpperCase() : "U"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <h4 className="text-[14px] font-semibold text-black truncate">
+                      {notif.senderName}
+                    </h4>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dismissNotification(notif.id);
+                      }}
+                      className="text-[#8e8e93] hover:text-red-500 text-xs font-bold ml-2 shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <p className="text-[13px] text-[#8e8e93] truncate leading-snug">
+                    {notif.msg}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Notification slide-in animation */}
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
 
       {/* ================= IMAGE LIGHTBOX PREVIEW ================= */}
       {previewImage && (

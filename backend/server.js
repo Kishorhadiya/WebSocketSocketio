@@ -82,8 +82,9 @@ io.on("connection", (socket) => {
                 }
 
                 // Send current unread counts & latest messages summary for sidebar
+                // Only count messages that are NOT yet seen (exclude status:"seen" AND seenmsg:true)
                 const unreadSummary = await SocketData.aggregate([
-                    { $match: { receiveid: userId, seenmsg: false } },
+                    { $match: { receiveid: userId, status: { $ne: "seen" }, seenmsg: { $ne: true } } },
                     { $group: { _id: "$senderid", count: { $sum: 1 } } }
                 ]);
 
@@ -140,6 +141,8 @@ io.on("connection", (socket) => {
             // Also deliver directly to receiver's personal room if different
             if (recipientId && recipientId !== String(data.senderid)) {
                 io.to(recipientId).emit("messages", savedMsg);
+                // Send notification event to receiver (for popup toast)
+                io.to(recipientId).emit("notification-msg", savedMsg);
             }
         } catch (error) {
             console.error("Error saving socket message:", error);
