@@ -33,7 +33,11 @@ const Register = () => {
       }
     } catch (err) {
       console.error('Registration error:', err);
-      setError(err.response?.data?.message || 'Registration failed');
+      setError(
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Registration failed'
+      );
     } finally {
       setLoading(false);
     }
