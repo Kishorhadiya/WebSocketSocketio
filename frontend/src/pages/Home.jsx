@@ -4,22 +4,13 @@ import axios from "axios";
 import { io } from "socket.io-client";
 import {
   IoChevronBack,
-  IoCallOutline,
-  IoVideocamOutline,
   IoSearchOutline,
   IoAdd,
   IoSend,
-  IoCameraOutline,
-  IoMicOutline,
   IoCheckmarkDone,
-  IoCreateOutline,
   IoChevronForward,
   IoDocumentTextOutline,
   IoChatbubbleOutline,
-  IoSettingsOutline,
-  IoEllipseOutline,
-  IoClose,
-  IoImageOutline,
   IoLogOutOutline,
 } from "react-icons/io5";
 import { API_URL } from "../config";
@@ -27,7 +18,7 @@ import chatBg from "../assets/chat-bg.jpg";
 
 const socket = io(API_URL);
 
-// WhatsApp style avatar colors
+// WhatsApp avatar color generator
 const AVATAR_COLORS = [
   "bg-[#007AFF]",
   "bg-[#34C759]",
@@ -77,9 +68,6 @@ const Home = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [previewImage, setPreviewImage] = useState(null);
-  const [showContactInfo, setShowContactInfo] = useState(false);
-  const [activeTab, setActiveTab] = useState("chats"); // 'status' | 'calls' | 'camera' | 'chats' | 'settings'
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const messagesEndRef = useRef(null);
 
@@ -233,57 +221,62 @@ const Home = () => {
     <div className="h-screen w-screen flex bg-[#f0f2f5] font-[-apple-system,BlinkMacSystemFont,'SF_Pro_Text','Segoe_UI',Roboto,Helvetica,Arial,sans-serif] text-[#000000] overflow-hidden select-none">
       {/* ================= LEFT SIDEBAR (CHATS LIST) ================= */}
       <div
-        className={`w-full md:w-[380px] lg:w-[400px] bg-white border-r border-[#e5e5ea] flex flex-col shrink-0 h-full ${
+        className={`w-full md:w-[360px] lg:w-[380px] bg-white border-r border-[#e5e5ea] flex flex-col shrink-0 h-full ${
           chatuser ? "hidden md:flex" : "flex"
         }`}
       >
-        {/* Top iOS Header Bar */}
-        <div className="pt-3 px-4 pb-2 bg-white flex flex-col shrink-0">
-          {/* Top action row: Edit | Broadcast Lists & New Group | New Chat */}
-          <div className="flex items-center justify-between h-9">
-            <button
-              onClick={() => setShowSettingsModal(true)}
-              className="text-[#007AFF] text-[17px] font-normal hover:opacity-75 transition-opacity"
-            >
-              Edit
-            </button>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowSettingsModal(true)}
-                className="text-[#007AFF] hover:opacity-75 transition-opacity"
-                title="Profile & Settings"
+        {/* Top Header: Logged in User Profile & Logout */}
+        <div className="pt-3 px-4 pb-2 bg-white flex flex-col shrink-0 border-b border-[#e5e5ea]/50">
+          <div className="flex items-center justify-between h-10 mb-1">
+            {/* Current User Info */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className={`w-9 h-9 rounded-full ${getAvatarColor(
+                  currentuser?.username
+                )} text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-2xs`}
               >
-                <IoCreateOutline className="w-6 h-6" />
-              </button>
+                {currentuser?.username
+                  ? currentuser.username.charAt(0).toUpperCase()
+                  : "U"}
+              </div>
+              <div className="truncate">
+                <h2 className="text-[15px] font-semibold text-black leading-tight truncate">
+                  {currentuser?.username || "My Account"}
+                </h2>
+                <p className="text-[12px] text-[#8e8e93] leading-none truncate">
+                  {currentuser?.email}
+                </p>
+              </div>
             </div>
+
+            {/* Real Logout Button */}
+            <button
+              onClick={logout}
+              className="p-2 text-[#8e8e93] hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+              title="Log Out"
+            >
+              <IoLogOutOutline className="w-5 h-5" />
+            </button>
           </div>
 
-          {/* Large Title "Chats" */}
-          <div className="flex items-center justify-between mt-1 mb-2">
-            <h1 className="text-[34px] font-bold text-black tracking-tight leading-none">
+          {/* Chats Heading */}
+          <div className="flex items-center justify-between mt-2 mb-2">
+            <h1 className="text-[28px] font-bold text-black tracking-tight leading-none">
               Chats
             </h1>
-            {currentuser?.username && (
-              <span className="text-xs font-semibold text-[#007AFF] bg-[#007AFF]/10 px-2.5 py-1 rounded-full">
-                @{currentuser.username}
-              </span>
-            )}
-          </div>
-
-          {/* Broadcast Lists / New Group Row */}
-          <div className="flex items-center justify-between text-[#007AFF] text-[15px] pb-2 font-normal">
-            <button className="hover:opacity-75">Broadcast Lists</button>
-            <button className="hover:opacity-75">New Group</button>
+            <span className="text-xs font-semibold text-[#007AFF] bg-[#007AFF]/10 px-2 py-0.5 rounded-full">
+              {filteredUsers.length} {filteredUsers.length === 1 ? "contact" : "contacts"}
+            </span>
           </div>
 
           {/* Search Bar */}
-          <div className="relative mt-1">
+          <div className="relative mt-1 mb-1">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#8e8e93]">
               <IoSearchOutline className="w-4 h-4" />
             </div>
             <input
               type="text"
-              placeholder="Search"
+              placeholder="Search contacts..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-1.5 bg-[#767680]/12 rounded-[10px] text-[15px] placeholder-[#8e8e93] text-black focus:outline-none transition-colors"
@@ -302,13 +295,13 @@ const Home = () => {
                 <div
                   key={user._id}
                   onClick={() => setChatuser(user)}
-                  className={`flex items-center px-4 py-2.5 cursor-pointer transition-colors ${
+                  className={`flex items-center px-4 py-3 cursor-pointer transition-colors ${
                     isSelected ? "bg-[#eef2f5]" : "hover:bg-[#f9f9fb]"
                   }`}
                 >
                   {/* Contact Avatar */}
                   <div
-                    className={`w-12 h-12 rounded-full ${avatarBg} text-white font-semibold text-lg flex items-center justify-center shrink-0 shadow-xs mr-3`}
+                    className={`w-12 h-12 rounded-full ${avatarBg} text-white font-semibold text-lg flex items-center justify-center shrink-0 shadow-2xs mr-3`}
                   >
                     {user.username ? user.username.charAt(0).toUpperCase() : "U"}
                   </div>
@@ -319,14 +312,14 @@ const Home = () => {
                       <h3 className="text-[16px] font-semibold text-black truncate">
                         {user.username}
                       </h3>
-                      <span className="text-[12px] text-[#8e8e93] shrink-0 font-normal">
+                      <span className="text-[11px] text-[#34C759] font-medium shrink-0">
                         Online
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center text-[14px] text-[#8e8e93] truncate">
-                        <IoCheckmarkDone className="w-4 h-4 text-[#34B7F1] shrink-0 mr-1" />
+                      <div className="flex items-center text-[13px] text-[#8e8e93] truncate">
+                        <IoCheckmarkDone className="w-3.5 h-3.5 text-[#34B7F1] shrink-0 mr-1" />
                         <span className="truncate">{user.email}</span>
                       </div>
                       <IoChevronForward className="w-4 h-4 text-[#c7c7cc] shrink-0 ml-1" />
@@ -337,69 +330,9 @@ const Home = () => {
             })
           ) : (
             <div className="p-8 text-center text-sm text-[#8e8e93]">
-              No other users found
+              {searchQuery ? "No contacts match your search" : "No other users found"}
             </div>
           )}
-        </div>
-
-        {/* Bottom Tab Bar (WhatsApp iOS Style) */}
-        <div className="h-[60px] border-t border-[#e5e5ea] bg-[#f8f8f8] flex items-center justify-around shrink-0 px-2">
-          <button
-            onClick={() => setActiveTab("status")}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] ${
-              activeTab === "status" ? "text-[#007AFF] font-medium" : "text-[#8e8e93]"
-            }`}
-          >
-            <IoEllipseOutline className="w-6 h-6" />
-            <span>Status</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("calls")}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] ${
-              activeTab === "calls" ? "text-[#007AFF] font-medium" : "text-[#8e8e93]"
-            }`}
-          >
-            <IoCallOutline className="w-6 h-6" />
-            <span>Calls</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("camera")}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] ${
-              activeTab === "camera" ? "text-[#007AFF] font-medium" : "text-[#8e8e93]"
-            }`}
-          >
-            <IoCameraOutline className="w-6 h-6" />
-            <span>Camera</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("chats")}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] ${
-              activeTab === "chats" ? "text-[#007AFF] font-medium" : "text-[#8e8e93]"
-            }`}
-          >
-            <div className="relative">
-              <IoChatbubbleOutline className="w-6 h-6 text-[#007AFF]" />
-              {filteredUsers.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#007AFF] text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
-                  {filteredUsers.length}
-                </span>
-              )}
-            </div>
-            <span>Chats</span>
-          </button>
-
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] ${
-              activeTab === "settings" ? "text-[#007AFF] font-medium" : "text-[#8e8e93]"
-            }`}
-          >
-            <IoSettingsOutline className="w-6 h-6" />
-            <span>Settings</span>
-          </button>
         </div>
       </div>
 
@@ -410,7 +343,7 @@ const Home = () => {
         }`}
       >
         {/* Chat Top Header Bar */}
-        <div className="h-[60px] px-3 md:px-4 bg-[#f8f8f8]/95 backdrop-blur-md border-b border-[#e5e5ea] flex items-center justify-between shrink-0 z-20">
+        <div className="h-[60px] px-3 md:px-4 bg-[#f8f8f8] border-b border-[#e5e5ea] flex items-center justify-between shrink-0 z-20">
           <div className="flex items-center gap-2 min-w-0">
             {/* Mobile Back Button (< chevron) */}
             <button
@@ -422,10 +355,7 @@ const Home = () => {
             </button>
 
             {chatuser ? (
-              <div
-                onClick={() => setShowContactInfo(true)}
-                className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
-              >
+              <div className="flex items-center gap-2.5 min-w-0">
                 <div
                   className={`w-9 h-9 rounded-full ${getAvatarColor(
                     chatuser.username
@@ -439,8 +369,8 @@ const Home = () => {
                   <h2 className="font-semibold text-[15px] text-black leading-tight truncate">
                     {chatuser.username}
                   </h2>
-                  <p className="text-[11px] text-[#8e8e93] leading-none mt-0.5 hover:text-[#007AFF] transition-colors">
-                    tap here for contact info
+                  <p className="text-[11px] text-[#34C759] font-medium leading-none mt-0.5">
+                    Online
                   </p>
                 </div>
               </div>
@@ -450,26 +380,6 @@ const Home = () => {
               </h2>
             )}
           </div>
-
-          {/* Header Action Icons: Video & Call */}
-          {chatuser && (
-            <div className="flex items-center gap-4 text-[#007AFF]">
-              <button
-                onClick={() => setShowContactInfo(true)}
-                className="hover:opacity-75 p-1 transition-opacity"
-                title="Video Call"
-              >
-                <IoVideocamOutline className="w-6 h-6" />
-              </button>
-              <button
-                onClick={() => setShowContactInfo(true)}
-                className="hover:opacity-75 p-1 transition-opacity"
-                title="Audio Call"
-              >
-                <IoCallOutline className="w-5 h-5" />
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Empty State when no chat is selected on desktop */}
@@ -483,12 +393,12 @@ const Home = () => {
               backgroundBlendMode: "overlay",
             }}
           >
-            <div className="w-20 h-20 rounded-full bg-white/80 shadow-md flex items-center justify-center mb-4 text-[#007AFF]">
-              <IoChatbubbleOutline className="w-10 h-10" />
+            <div className="w-16 h-16 rounded-full bg-white/90 shadow-md flex items-center justify-center mb-3 text-[#007AFF]">
+              <IoChatbubbleOutline className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-bold text-black mb-1">WhatsApp Web</h3>
-            <p className="text-sm text-[#8e8e93] max-w-sm leading-relaxed">
-              Send and receive messages in real time. Select a contact from the list on the left to start chatting.
+            <h3 className="text-lg font-bold text-black mb-1">WhatsApp Web</h3>
+            <p className="text-xs text-[#8e8e93] max-w-xs leading-relaxed">
+              Select a contact from the list on the left to start chatting in real time.
             </p>
           </div>
         ) : (
@@ -587,7 +497,7 @@ const Home = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Selected File Previews */}
+            {/* Selected File Previews (before sending) */}
             {selectedFiles.length > 0 && (
               <div className="bg-[#f0f2f5] border-t border-[#e5e5ea] px-4 py-2 flex flex-wrap gap-2">
                 {selectedFiles.map((file, idx) => (
@@ -613,7 +523,7 @@ const Home = () => {
 
             {/* Bottom iOS Input Bar */}
             <div className="h-[56px] px-3 bg-[#f6f6f6] border-t border-[#e5e5ea] flex items-center gap-2 shrink-0 z-20">
-              {/* Attachment '+' Button */}
+              {/* Real Attachment '+' Button */}
               <label
                 htmlFor="file-input"
                 className="text-[#007AFF] hover:opacity-75 cursor-pointer p-1 transition-opacity flex items-center justify-center shrink-0"
@@ -650,180 +560,20 @@ const Home = () => {
                   className="flex-1 bg-white rounded-full border border-[#d1d5db] px-4 py-1.5 text-[15px] text-black placeholder:text-[#8e8e93] focus:outline-none focus:border-[#007AFF] transition-all"
                 />
 
-                {/* Right Icons: Camera / Send / Mic */}
-                <label
-                  htmlFor="file-input"
-                  className="text-[#007AFF] hover:opacity-75 cursor-pointer p-1 transition-opacity shrink-0"
-                  title="Camera / Upload"
+                {/* Send Button */}
+                <button
+                  type="submit"
+                  disabled={!inputmsg.trim() && selectedFiles.length === 0}
+                  className="w-8 h-8 rounded-full bg-[#007AFF] hover:bg-[#0062cc] disabled:opacity-40 text-white flex items-center justify-center transition-all shrink-0 active:scale-95 cursor-pointer"
+                  title="Send"
                 >
-                  <IoCameraOutline className="w-6 h-6" />
-                </label>
-
-                {inputmsg.trim() || selectedFiles.length > 0 ? (
-                  <button
-                    type="submit"
-                    className="w-8 h-8 rounded-full bg-[#007AFF] hover:bg-[#0062cc] text-white flex items-center justify-center transition-all shrink-0 active:scale-95"
-                    title="Send"
-                  >
-                    <IoSend className="w-4 h-4 ml-0.5" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="text-[#007AFF] hover:opacity-75 p-1 transition-opacity shrink-0"
-                    title="Voice message"
-                  >
-                    <IoMicOutline className="w-6 h-6" />
-                  </button>
-                )}
+                  <IoSend className="w-4 h-4 ml-0.5" />
+                </button>
               </form>
             </div>
           </>
         )}
       </div>
-
-      {/* ================= CONTACT INFO MODAL (WhatsApp Contact Info.png) ================= */}
-      {showContactInfo && chatuser && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setShowContactInfo(false)}
-        >
-          <div
-            className="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-[#e5e5ea] animate-scale-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="h-12 px-4 border-b border-[#e5e5ea] flex items-center justify-between bg-[#f8f8f8]">
-              <button
-                onClick={() => setShowContactInfo(false)}
-                className="text-[#007AFF] text-[16px] font-normal hover:opacity-75 flex items-center"
-              >
-                <IoChevronBack className="w-5 h-5 mr-0.5" />
-                Back
-              </button>
-              <h3 className="font-semibold text-[16px] text-black">Contact Info</h3>
-              <button
-                onClick={() => setShowContactInfo(false)}
-                className="text-[#007AFF] text-[16px] font-normal hover:opacity-75"
-              >
-                Done
-              </button>
-            </div>
-
-            {/* Profile Avatar & Details */}
-            <div className="p-6 flex flex-col items-center border-b border-[#e5e5ea] bg-white">
-              <div
-                className={`w-24 h-24 rounded-full ${getAvatarColor(
-                  chatuser.username
-                )} text-white font-bold text-3xl flex items-center justify-center shadow-md mb-3`}
-              >
-                {chatuser.username ? chatuser.username.charAt(0).toUpperCase() : "U"}
-              </div>
-              <h2 className="text-xl font-bold text-black">{chatuser.username}</h2>
-              <p className="text-sm text-[#8e8e93] mt-0.5">{chatuser.email}</p>
-
-              {/* Action Buttons: Message | Call | Video */}
-              <div className="flex items-center gap-6 mt-4">
-                <button
-                  onClick={() => setShowContactInfo(false)}
-                  className="flex flex-col items-center gap-1 text-[#007AFF] hover:opacity-75"
-                >
-                  <div className="w-10 h-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
-                    <IoChatbubbleOutline className="w-5 h-5" />
-                  </div>
-                  <span className="text-xs">Message</span>
-                </button>
-                <button className="flex flex-col items-center gap-1 text-[#007AFF] hover:opacity-75">
-                  <div className="w-10 h-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
-                    <IoCallOutline className="w-5 h-5" />
-                  </div>
-                  <span className="text-xs">Audio</span>
-                </button>
-                <button className="flex flex-col items-center gap-1 text-[#007AFF] hover:opacity-75">
-                  <div className="w-10 h-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
-                    <IoVideocamOutline className="w-5 h-5" />
-                  </div>
-                  <span className="text-xs">Video</span>
-                </button>
-              </div>
-            </div>
-
-            {/* About / Status Section */}
-            <div className="p-4 border-b border-[#e5e5ea] bg-white">
-              <span className="text-xs font-semibold text-[#8e8e93] uppercase tracking-wider block mb-1">
-                About & Status
-              </span>
-              <p className="text-sm text-black">
-                Design adds value faster, than it adds cost
-              </p>
-            </div>
-
-            {/* Media, Links & Docs Row */}
-            <div className="p-4 bg-white flex items-center justify-between hover:bg-[#f9f9fb] cursor-pointer">
-              <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-md bg-[#007AFF] text-white flex items-center justify-center">
-                  <IoImageOutline className="w-4 h-4" />
-                </div>
-                <span className="text-sm text-black font-medium">Media, Links, and Docs</span>
-              </div>
-              <div className="flex items-center gap-1 text-sm text-[#8e8e93]">
-                <span>{handledata.filter((m) => m.file?.length > 0).length}</span>
-                <IoChevronForward className="w-4 h-4 text-[#c7c7cc]" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= PROFILE & SETTINGS MODAL ================= */}
-      {showSettingsModal && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setShowSettingsModal(false)}
-        >
-          <div
-            className="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-[#e5e5ea]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="h-12 px-4 border-b border-[#e5e5ea] flex items-center justify-between bg-[#f8f8f8]">
-              <span className="text-sm font-semibold text-black">Settings</span>
-              <button
-                onClick={() => setShowSettingsModal(false)}
-                className="text-[#007AFF] text-sm font-normal hover:opacity-75"
-              >
-                Done
-              </button>
-            </div>
-
-            <div className="p-6 flex flex-col items-center border-b border-[#e5e5ea]">
-              <div
-                className={`w-20 h-20 rounded-full ${getAvatarColor(
-                  currentuser?.username
-                )} text-white font-bold text-2xl flex items-center justify-center shadow-md mb-2`}
-              >
-                {currentuser?.username
-                  ? currentuser.username.charAt(0).toUpperCase()
-                  : "U"}
-              </div>
-              <h3 className="font-bold text-lg text-black">{currentuser?.username}</h3>
-              <p className="text-xs text-[#8e8e93]">{currentuser?.email}</p>
-            </div>
-
-            <div className="p-4">
-              <button
-                onClick={() => {
-                  setShowSettingsModal(false);
-                  logout();
-                }}
-                className="w-full py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <IoLogOutOutline className="w-5 h-5" />
-                Log Out
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ================= IMAGE LIGHTBOX PREVIEW ================= */}
       {previewImage && (
