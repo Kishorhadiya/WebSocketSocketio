@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useData } from "./Context";
 import axios from "axios";
 import { io } from "socket.io-client";
@@ -18,13 +18,33 @@ const Home = () => {
   const [uploadfiles, setUploadfiles] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [previewImage, setPreviewImage] = useState(null);
+  const messagesEndRef = useRef(null);
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const myId = currentuser?._id || currentuser?.U?._id;
+  const targetId = chatuser?._id || chatuser?.U?._id;
 
+  const roomid =
+    myId && targetId
+      ? [String(myId), String(targetId)].sort().join("_")
+      : null;
+
+  // Filter out the logged-in user so they only chat with other users
+  const filteredUsers = users
+    .filter((u) => String(u._id) !== String(myId))
+    .filter(
+      (u) =>
+        u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+  // Auto-scroll to bottom of chat
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [handledata]);
 
   // Handle file upload API call
   const handlefunc = async () => {
@@ -39,7 +59,6 @@ const Home = () => {
       const response = await axios.post(
         `${API_URL}/api/v1/upload/upload`,
         formData
-     
       );
       return response.data;
     } catch (error) {
@@ -47,14 +66,6 @@ const Home = () => {
       return null;
     }
   };
-
-  const myId = currentuser?._id || currentuser?.U?._id;
-  const targetId = chatuser?._id || chatuser?.U?._id;
-
-  const roomid =
-    myId && targetId
-      ? [String(myId), String(targetId)].sort().join("_")
-      : null;
 
   // Get all users
   const getAllUser = async () => {
@@ -96,53 +107,76 @@ const Home = () => {
     setSelectedFiles([]);
   };
 
-  // Initial setup
+  // Initial setup & reconnect handler
   useEffect(() => {
     getAllUser();
 
-    socket.on("connect", () => {
-    });
+    const handleConnect = () => {
+      if (myId) {
+        socket.emit("user-id", myId);
+      }
+      if (roomid) {
+        socket.emit("roomid", roomid);
+        socket.emit("getmsg", roomid);
+      }
+    };
 
-    socket.emit("user-id", myId);
+    socket.on("connect", handleConnect);
+
+    if (socket.connected) {
+      handleConnect();
+    }
 
     return () => {
-      socket.off("connect");
+      socket.off("connect", handleConnect);
     };
-  }, [myId]);
-useEffect(() => {
-  if (!roomid) {
+  }, [myId, roomid]);
+
+  // Room messages listener
+  useEffect(() => {
+    if (!roomid) {
+      setHandledata([]);
+      return;
+    }
+
+    // Clear previous chat immediately
     setHandledata([]);
-    return;
-  }
 
-  // Clear previous chat immediately
-  setHandledata([]);
+    // Join room
+    socket.emit("roomid", roomid);
 
-  // Join room
-  socket.emit("roomid", roomid);
+    // Receive old messages
+    const receiveOldMessages = (data) => {
+      if (Array.isArray(data)) {
+        setHandledata(data);
+      }
+    };
 
-  // Receive old messages
-  const receiveOldMessages = (data) => {
-    setHandledata(data);
-  };
+    // Receive new messages
+    const receiveMessage = (data) => {
+      if (String(data.roomid) === String(roomid)) {
+        setHandledata((prev) => {
+          const isDuplicate = prev.some(
+            (m) => m._id && data._id && String(m._id) === String(data._id)
+          );
+          if (isDuplicate) return prev;
+          return [...prev, data];
+        });
+      }
+    };
 
-  // Receive new messages
-  const receiveMessage = (data) => {
-    setHandledata((prev) => [...prev, data]);
-  };
+    // Listeners first
+    socket.on("oldmsg", receiveOldMessages);
+    socket.on("messages", receiveMessage);
 
-  // IMPORTANT: listeners first
-  socket.on("oldmsg", receiveOldMessages);
-  socket.on("messages", receiveMessage);
+    // Request conversation history
+    socket.emit("getmsg", roomid);
 
-  // Then request old messages
-  socket.emit("getmsg", roomid);
-
-  return () => {
-    socket.off("oldmsg", receiveOldMessages);
-    socket.off("messages", receiveMessage);
-  };
-}, [roomid]);
+    return () => {
+      socket.off("oldmsg", receiveOldMessages);
+      socket.off("messages", receiveMessage);
+    };
+  }, [roomid]);
   return (
     <div className="h-screen w-screen flex bg-white font-sans text-slate-800 overflow-hidden">
       {/* Sidebar */}
@@ -316,6 +350,7 @@ useEffect(() => {
                     </div>
                   );
                 })}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}
